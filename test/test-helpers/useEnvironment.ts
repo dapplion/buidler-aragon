@@ -9,11 +9,11 @@ declare module 'mocha' {
 }
 
 export function useDefaultEnvironment(): void {
-  useEnvironment('counter')
+  useEnvironment('test-app')
 }
 
 export function useEnvironment(
-  projectName: string,
+  projectName: 'counter' | 'token-wrapper' | 'test-app',
   networkName = 'buidlerevm'
 ): void {
   const projectPath = path.join(__dirname, '../projects', projectName)

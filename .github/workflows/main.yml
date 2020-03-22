@@ -12,12 +12,25 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+
+      # Install all package.json with cache
+      - uses: bahmutov/npm-install@v1
+
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v1
         with:
           node-version: ${{ matrix.node-version }}
       - run: npm install
-      - run: npm run dev
+      - name: Generate typechain and compile typescript
+        run: |
+          npm run generate
+          npm run build
+      - name: Install test project dependencies
+        run: |
+          cd test/projects/test-app
+          npm install
+          cd ../../..
+
       - run: npm run lint
       - run: npm test
         env:

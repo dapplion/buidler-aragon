@@ -6,19 +6,20 @@ import { setAllPermissionsOpenly } from '~/src/tasks/start/backend/set-permissio
 import { updateApp } from '~/src/tasks/start/backend/update-app'
 import { useEnvironment } from '~/test/test-helpers/useEnvironment'
 import { TASK_COMPILE } from '~/src/tasks/task-names'
-import { itBehavesLikeACounterContract } from './counter-behavior'
+import { assertIsCounterContract } from './counter-behavior'
 import {
   startGanache,
   stopGanache
 } from '~/src/tasks/start/backend/start-ganache'
 import { getAppEnsName, getAppName, readArapp } from '~/src/utils/arappUtils'
 import { getAppId } from '~/src/utils/appName'
+import { AppStubInstance, RepoInstance } from '~/typechain'
 
 describe('update-app.ts', function() {
   // Note: These particular tests use localhost instead of buidlerevm.
   // This is required for bases to have the expected addresses,
   // And because we want to restart the chain on certain tests.
-  useEnvironment('counter', 'localhost')
+  useEnvironment('test-app', 'localhost')
 
   let ensAddress, apmAddress, daoFactoryAddress
   let appName, appId
@@ -48,31 +49,33 @@ describe('update-app.ts', function() {
   })
 
   describe('when an app is created', function() {
-    let proxy, repo, implementation
+    let appContext: {
+      implementation: Truffle.ContractInstance
+      proxy: AppStubInstance
+      repo: RepoInstance
+    }
 
     before('create app', async function() {
-      ;({ proxy, repo, implementation } = await createApp(
+      appContext = await createApp(
         appName,
         appId,
         dao,
         ensAddress,
         apmAddress,
         this.env
-      ))
+      )
 
-      await proxy.initialize()
+      const initialCount = 35
+      await appContext.proxy.initialize(initialCount as any)
 
       const arapp = readArapp()
       await setAllPermissionsOpenly(
         dao,
-        proxy,
+        appContext.proxy,
         arapp,
         this.env.web3,
         this.env.artifacts
       )
-
-      // Necessary for using behaviors.
-      this.proxy = proxy
     })
 
     describe('when updating the app', function() {
@@ -87,14 +90,17 @@ describe('update-app.ts', function() {
         ;({ implementationAddress, version, uri } = await updateApp(
           appId,
           dao,
-          repo,
+          appContext.repo,
           port,
           this.env
         ))
       })
 
       it('uses a different implementation', function() {
-        assert.notEqual(implementation.addresses, implementationAddress)
+        assert.notEqual(
+          appContext.implementation.address,
+          implementationAddress
+        )
       })
 
       it('the dao references the correct implementation for it', async function() {
@@ -109,18 +115,20 @@ describe('update-app.ts', function() {
         it('proxy references the dao that created it', async function() {
           assert.equal(
             dao.address,
-            await proxy.kernel(),
+            await appContext.proxy.kernel(),
             'Incorrect kernel in proxy'
           )
         })
 
-        itBehavesLikeACounterContract()
+        it('assert counter contract functionality', async function() {
+          await assertIsCounterContract(appContext.proxy)
+        })
       })
 
       describe('when interacting with the repo', function() {
         it('returns a valid version count', async function() {
-          const count = (await repo.getVersionsCount()).toString()
-          assert.equal(count, 1, 'Invalid version count')
+          const count = await appContext.repo.getVersionsCount()
+          assert.equal(count.toNumber(), 1, 'Invalid version count')
         })
 
         it('reports the correct content uri', async function() {
@@ -132,7 +140,8 @@ describe('update-app.ts', function() {
         })
 
         it('updates the repo version', async function() {
-          const latest = (await repo.getLatest())[0]
+          const latestRes = await appContext.repo.getLatest()
+          const latest = latestRes[0]
           const major = latest[0].toNumber()
           assert.equal(major, 1, 'Incorrect major version')
         })

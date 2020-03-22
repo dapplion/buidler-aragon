@@ -26,7 +26,7 @@ describe('start-ganache.ts', async function() {
   })
 
   describe('when using a network that is not buidlerevm nor localhost', async function() {
-    useEnvironment('counter', 'someothernetwork')
+    useEnvironment('test-app', 'someothernetwork')
 
     it('throws when attempting to start ganache', async function() {
       await startGanache(this.env).catch(err => {
@@ -39,7 +39,7 @@ describe('start-ganache.ts', async function() {
   })
 
   describe('when the target port is in use', async function() {
-    useEnvironment('counter', 'localhost')
+    useEnvironment('test-app', 'localhost')
 
     let server
 
@@ -71,7 +71,7 @@ describe('start-ganache.ts', async function() {
 
   describe('when the target port is not in use', async function() {
     describe('when ganache is started', async function() {
-      useEnvironment('counter', 'localhost')
+      useEnvironment('test-app', 'localhost')
 
       let networkId: number
 

@@ -6,13 +6,14 @@ import { createDao } from '~/src/tasks/start/backend/create-dao'
 import { useEnvironment } from '~/test/test-helpers/useEnvironment'
 import { isNonZeroAddress } from '~/test/test-helpers/isNonZeroAddress'
 import { setAllPermissionsOpenly } from '~/src/tasks/start/backend/set-permissions'
-import { itBehavesLikeACounterContract } from './counter-behavior'
+import { assertIsCounterContract } from './counter-behavior'
 import {
   startGanache,
   stopGanache
 } from '~/src/tasks/start/backend/start-ganache'
 import { readArapp, getAppEnsName, getAppName } from '~/src/utils/arappUtils'
 import { getAppId } from '~/src/utils/appName'
+import { AppStubInstance, RepoInstance } from '~/typechain'
 
 describe('create-app.ts', function() {
   // Note: These particular tests use localhost instead of buidlerevm.
@@ -48,43 +49,47 @@ describe('create-app.ts', function() {
   })
 
   describe('when an app is created', function() {
-    let proxy, repo, implementation
+    let appContext: {
+      implementation: Truffle.ContractInstance
+      proxy: AppStubInstance
+      repo: RepoInstance
+    }
 
     before('create app', async function() {
-      ;({ proxy, repo, implementation } = await createApp(
+      appContext = await createApp(
         appName,
         appId,
         dao,
         ensAddress,
         apmAddress,
         this.env
-      ))
+      )
 
-      await proxy.initialize()
+      await appContext.proxy.initialize()
 
       const arapp = readArapp()
       await setAllPermissionsOpenly(
         dao,
-        proxy,
+        appContext.proxy,
         arapp,
         this.env.web3,
         this.env.artifacts
       )
-
-      // Necessary for using behaviors.
-      this.proxy = proxy
     })
 
     it('dao references the correct implementation for it', async function() {
       assert.equal(
-        implementation.address,
+        appContext.implementation.address,
         await dao.getApp(await dao.APP_BASES_NAMESPACE(), appId),
         'Incorrect implementation in proxy'
       )
     })
 
     it('produces a repo with a valid address', async function() {
-      assert(isNonZeroAddress(repo.address), 'Invalid contract address.')
+      assert(
+        isNonZeroAddress(appContext.repo.address),
+        'Invalid contract address.'
+      )
     })
 
     it('reverts when attempting to create the app again', async function() {
@@ -96,12 +101,15 @@ describe('create-app.ts', function() {
 
     describe('when interacting with the repo', function() {
       it('returns a valid version count', async function() {
-        const count = (await repo.getVersionsCount()).toString()
+        const count = (await appContext.repo.getVersionsCount()).toNumber()
         assert.equal(count, 0, 'Invalid version count')
       })
 
       it('returns the expected latest version', async function() {
-        await assertRevert(repo.getLatest(), 'REPO_INEXISTENT_VERSION')
+        await assertRevert(
+          appContext.repo.getLatest(),
+          'REPO_INEXISTENT_VERSION'
+        )
       })
     })
 
@@ -109,12 +117,14 @@ describe('create-app.ts', function() {
       it('proxy references the dao that created it', async function() {
         assert.equal(
           dao.address,
-          await proxy.kernel(),
+          await appContext.proxy.kernel(),
           'Incorrect kernel in proxy'
         )
       })
 
-      itBehavesLikeACounterContract()
+      it('assert counter contract functionality', async function() {
+        await assertIsCounterContract(appContext.proxy)
+      })
     })
   })
 })

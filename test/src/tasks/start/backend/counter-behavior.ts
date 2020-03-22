@@ -1,26 +1,33 @@
 import { assert } from 'chai'
+import { AppStubInstance } from '~/typechain'
+import { BigNumber } from 'ethers/utils'
 
-export const itBehavesLikeACounterContract = function(this: any): void {
-  it('allows any address to increment and decrement the counter', async function() {
-    let value
+interface ProxyInstance extends AppStubInstance {
+  value: () => Promise<BigNumber>
+  getVersion: () => Promise<BigNumber>
+  increment: (value: number) => Promise<void>
+  decrement: (value: number) => Promise<void>
+}
 
-    value = (await this.proxy.value()).toString()
-    assert.equal(value, 0, 'Incorrect value on this.proxy')
+export const assertIsCounterContract = async function(
+  proxy: AppStubInstance
+): Promise<void> {
+  const proxyInstance: ProxyInstance = proxy as ProxyInstance
+  if (!proxyInstance) throw Error('proxyInstance is not defined')
+  const parse = (r: any): number => parseInt(r.toString())
+  const getValue = (): Promise<number> => proxyInstance.value().then(parse)
+  const x = 1
 
-    await this.proxy.increment(1)
+  // allows any address to increment and decrement the counter
+  const initialValue = await getValue()
 
-    value = (await this.proxy.value()).toString()
-    assert.equal(value, 1, 'Incorrect value on this.proxy')
+  await proxyInstance.increment(x)
+  assert.equal(await getValue(), initialValue + x, 'Should increment')
 
-    await this.proxy.decrement(1)
+  await proxyInstance.decrement(x)
+  assert.equal(await getValue(), initialValue, 'Should decrement')
 
-    value = (await this.proxy.value()).toString()
-    assert.equal(value, 0, 'Incorrect value on this.proxy')
-  })
-
-  it('reports the correct hardcoded version', async function() {
-    const version = (await this.proxy.getVersion()).toString()
-
-    assert.equal(version, '0', 'Incorrect counter this.proxy version')
-  })
+  // reports the correct hardcoded version
+  const version = await proxyInstance.getVersion().then(parse)
+  assert.equal(version, 0, 'Incorrect counter this.proxy version')
 }
